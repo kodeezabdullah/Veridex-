@@ -21,9 +21,9 @@ The planner-facing product helps users search for a healthcare capability in a g
 
 ## Screens and user flow
 
-1. **Selector (`/`)**: Capability selector (ICU, maternity, emergency, oncology, trauma, NICU) and a cascading/searchable geography selector (state → district → city → PIN). Search navigates to `/map` with query parameters.
-2. **Map (`/map`)**: District-level India choropleth showing trust-weighted coverage. `verified_coverage` is green, `weak_coverage` is amber, `no_facility` is red, and `no_data` is a visually distinct hatched/grey treatment. Selecting a district drills into its facilities.
-3. **Facility list (within map flow)**: Facility cards show name, claimed capabilities, evidence-aware trust status, and trust score. The list supports filtering and sorting by trust score.
+1. **Chat-driven evidence map (`/`)**: The full-screen MapLibre + Deck.gl map is the primary landing view with a docked conversational agent. Natural-language queries replace the retired categorical selector. A response changes capability coverage, smoothly flies to matching districts, emphasizes matched facility markers, and remains visible in conversation history.
+2. **Facility marker popup (within `/`)**: Clicking a marker opens a custom evidence card with facility name, claim/trust status, exact evidence snippet, and a link to the full evidence record. Coverage polygons are real district-level ADM2 boundaries.
+3. **Facility list (`/map`)**: The existing list-oriented map workspace remains available as a secondary view. Facility cards show name, claimed capabilities, evidence-aware trust status, and trust score with filtering and sorting.
 4. **Facility detail (`/facility/[id]`)**: Full profile and evidence view. Each claim shows `verified`, `claimed-only`, or `no-signal`, confidence, and the exact `text_span` highlighted in the corresponding `raw_fields` value. Notes and overrides are explicit planner inputs; the UI does not decide for them.
 5. **Scenarios (`/scenarios`)**: Saved facilities, notes, and overrides persisted across sessions in Lakebase or Supabase/PostGIS.
 
@@ -121,6 +121,24 @@ Returns facility records (the supplied contract presents a single record shape):
 
 Open API question: confirm whether list endpoints wrap arrays (for example `{ "facilities": [] }`) or return bare arrays. Keep normalization inside `lib/api.ts` so components remain unaffected.
 
+### `queryAgent(message: string)` — mocked integration seam
+
+The landing chat calls only `lib/api.ts::queryAgent`. The current implementation waits 600ms and uses keyword matching for capability, state, district, and city against mock data. Replace only this function’s internals when the backend agent is ready; callers depend on this exact response:
+
+```json
+{
+  "reply": "Found 2 facilities with ICU signals in Karnataka. I’ve focused the map and highlighted the matching facilities; open a marker to inspect trust and source evidence.",
+  "capability": "ICU",
+  "region": {
+    "state": "Karnataka",
+    "district": null
+  },
+  "matched_facility_ids": ["f_00123", "f_00456"]
+}
+```
+
+`capability` is one of the canonical capability names. `state` and `district` are nullable canonical geography names. `matched_facility_ids` contains only facility IDs already represented by the facility contract. The reply must describe evidence found without making a planning decision.
+
 ## Intended folder structure
 
 ```text
@@ -131,8 +149,7 @@ frontend/
     facility/[id]/page.tsx
     scenarios/page.tsx
   components/
-    CapabilitySelector.tsx
-    RegionSelector.tsx
+    ChatMapExperience.tsx
     MapView.tsx
     FacilityCard.tsx
     EvidenceView.tsx
@@ -153,7 +170,8 @@ Accessibility requirements: visible keyboard focus, semantic labels, adequate co
 
 ## Geographic data rules
 
-- Use district-level GeoJSON from a credible source such as DataMeet or Survey of India-derived shapefiles; record license/provenance when added.
+- The active boundary source is `public/geojson/geoBoundaries-IND-ADM2_simplified.geojson`, containing 735 simplified India district features from the official geoBoundaries gbOpen ADM2 release (API metadata reports 736 units). `shapeName` is the district coverage join key; both Polygon and MultiPolygon geometry are supported.
+- Source provenance: geoBoundaries boundary `IND-ADM2-76128533`, represented year 2021, source Pathways Data Pvt. Ltd./lgdirectory.gov.in, Open Data Commons Open Database License 1.0.
 - Do not source or fabricate PIN-level polygons.
 - PIN is a facility filter and point-marker attribute only, not a choropleth boundary.
 - Verify source district names/codes against backend region identifiers before production joining.
@@ -162,7 +180,7 @@ Accessibility requirements: visible keyboard focus, semantic labels, adequate co
 
 - [x] Project context and constraints recorded in this living document.
 - [x] Design tokens and base application shell established (warm mineral canvas, forest/verdigris palette, Georgia display typography, responsive shell, focus and reduced-motion states).
-- [x] Screen 1 selector built against India-consistent mock geography with cascading state → district → city → PIN controls and query-param navigation to `/map`.
+- [x] Original categorical Screen 1 retired and replaced by a full-screen chat-driven evidence map on `/`, with conversational history, suggestions, typing state, mock agent response, animated regional focus, matched markers, and premium facility popups.
 - [x] Map and coverage legend built with MapLibre GL JS + Deck.gl, district selection, facility point markers, all four semantic statuses, and explicit diagonal hatching for `no_data`.
 - [x] Facility list built inside the map flow with claim-status filtering, trust-score sorting, evidence previews, and explicit `no_data` vs confirmed-gap empty states.
 - [x] Facility detail and evidence highlighting built with claim tabs, exact `text_span` highlighting inside `raw_fields`, confidence/trust context, completeness indicators, planner notes, and manual dispositions.
@@ -175,12 +193,16 @@ Accessibility requirements: visible keyboard focus, semantic labels, adequate co
 - Final facility and region list response envelopes need backend confirmation.
 - Geography reference data and canonical state/district/city/PIN hierarchy need backend alignment.
 - The example contract labels Punjab/Faisalabad with PIN `38000`, which is not an India-consistent location. Treat it as an opaque shape example; use India-consistent mock geography in the UI and confirm backend data quality expectations.
-- Production GeoJSON source, license, simplification level, and join-key mapping remain to be chosen. `public/geojson/demo-districts.json` is a deliberately small rectangular demo fixture for interaction/state testing and must not be represented as authoritative district boundaries.
+- Real simplified India ADM2 geometry is active and keyed by exact district `shapeName`. Explicit aliases bridge source names such as `Bangalore`, `Mysore`, and `Mumbai` to mock-data names `Bengaluru Urban`, `Mysuru`, and `Mumbai City`. Retain geoBoundaries ODbL attribution in public deployment.
 - Databricks Apps runtime environment variables, build command, health check, and persistent data connectivity need early validation.
-- `/map` is the next implementation target; Screen 1 currently routes there but the route is intentionally not scaffolded ahead of the specified build order.
+- `/map` remains as a secondary facility-list workspace; `/` is the primary map and agent experience.
 - Screen 1 verification: `npm run lint` and `npm run build` pass on Next.js 16.2.10; `/` is statically prerendered and standalone output is enabled.
 - Dependency audit after upgrading from vulnerable Next.js 16.1.6 to 16.2.10 reports two moderate findings for Next.js's bundled PostCSS `<8.5.10`. npm offers only an invalid breaking downgrade (`next@9.3.3`) via `audit fix --force`; do not apply it. Recheck when Next.js ships a release bundling patched PostCSS.
 - Full frontend verification on 2026-07-19: `npm run lint` and `npm run build` pass. Dev-server HTTP checks returned 200 for `/`, `/map?capability=ICU`, `/facility/f_00123?capability=ICU`, and `/scenarios`, with no Next error markers or server stderr. Browser automation could not run because the `agent-browser` CLI is unavailable in the environment; manually verify map clicks, responsive layout, and localStorage reload behavior before demo.
+- Map rendering fix verified on 2026-07-19 through Chrome DevTools Protocol: `.map-canvas`, the MapLibre canvas, and `.deck-canvas` all inherit the full `.map-stage` height (560px at the narrow breakpoint; 708px at 1440×900). The map uses no-key CARTO Positron raster tiles, native MapLibre GeoJSON fill/pattern/border layers for coverage, a generated hatch pattern for `no_data`, and Deck.gl facility markers. All sampled CARTO tiles returned HTTP 200 with no browser errors.
+- Chat/map pivot verified on 2026-07-19 through Chrome DevTools Protocol at 1440×900. Querying “ICU coverage in Karnataka” produced the documented mock reply, retained the three-message conversation trail, flew to Karnataka’s coverage geometry, outlined the matching region, and enlarged two matched markers. Clicking `f_00456` opened a custom animated popup showing claimed-only, 58/100 trust, the evidence text “hospital website describes ICU,” and a working full-evidence link. No browser exceptions were observed; build and lint passed.
+- ADM2 boundary pivot: coverage is generated for all 735 real district `shapeName` keys. Facility counts/trust aggregate by district; known claims produce verified/weak coverage and unmatched districts alternate deterministically between confirmed-gap and no-data. The four canonical colors are centralized in `lib/coverage.ts`. Natural-language state queries focus the indexed mock districts within that state; district/city queries focus the matching ADM2 shape. Default camera starts at `[78.9, 22.5]`, zoom 4, then responsively fits India-wide bounds with overlay-aware padding. The desktop chat column remains 460px and chat body/input/suggestion text was enlarged for readability.
+- ADM2 browser verification on 2026-07-19: fresh loads at 1440x900 and 1024x900 showed the complete India extent with 735 district features, all four coverage statuses, two active map canvases, and no horizontal overflow. Rendered colors were `#4f8064`, `#d7a53f`, `#b4523e`, and `#9a9d97`; chat message/input text rendered at 13px and suggestion text at 11px. The coverage endpoint returned HTTP 200 and the Karnataka ICU query completed its animated district focus without browser exceptions.
 - Git/GitHub work is explicitly paused by the user until the frontend is functionally complete. Do not commit, configure remotes, push, or modify authorship unless the user explicitly resumes that work.
 
 ## Working conventions

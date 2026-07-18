@@ -99,29 +99,27 @@ const claims: Record<string, CapabilityClaim[]> = {
 
 export const facilities: Facility[] = baseFacilities.map((facility) => ({ ...facility, capabilities: claims[facility.facility_id] }));
 
-const coverageMatrix: Record<CapabilityName, CoverageStatus[]> = {
-  ICU: ["verified_coverage", "weak_coverage", "verified_coverage", "weak_coverage", "weak_coverage", "no_data", "verified_coverage", "no_facility"],
-  Maternity: ["weak_coverage", "verified_coverage", "no_facility", "verified_coverage", "weak_coverage", "no_data", "no_data", "weak_coverage"],
-  Emergency: ["weak_coverage", "no_data", "verified_coverage", "verified_coverage", "verified_coverage", "no_facility", "verified_coverage", "weak_coverage"],
-  Oncology: ["no_data", "no_facility", "verified_coverage", "no_data", "no_facility", "no_data", "verified_coverage", "weak_coverage"],
-  Trauma: ["no_data", "no_facility", "verified_coverage", "no_data", "weak_coverage", "no_facility", "weak_coverage", "no_data"],
-  NICU: ["verified_coverage", "weak_coverage", "no_data", "no_facility", "no_data", "no_data", "weak_coverage", "verified_coverage"],
-};
+export function normalizeStateName(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
 
-const regionDefs = [
-  ["KA-BU", "Bengaluru Urban", "Karnataka"], ["KA-MY", "Mysuru", "Karnataka"],
-  ["MH-PU", "Pune", "Maharashtra"], ["MH-MC", "Mumbai City", "Maharashtra"],
-  ["OD-KH", "Khordha", "Odisha"], ["OD-CT", "Cuttack", "Odisha"],
-  ["TN-CH", "Chennai", "Tamil Nadu"], ["TN-CO", "Coimbatore", "Tamil Nadu"],
-] as const;
+const sourceDistrictAliases: Record<string, string> = { bangalore: "Bengaluru Urban", mysore: "Mysuru", mumbai: "Mumbai City" };
 
-export const regionCoverage: RegionCoverage[] = capabilities.flatMap((capability) =>
-  regionDefs.map(([region_id, region_name, state], index) => {
-    const matching = facilities.filter((f) => f.location.district === region_name && f.capabilities.some((c) => c.name === capability));
-    const scores = matching.flatMap((f) => f.capabilities.filter((c) => c.name === capability).map((c) => c.trust_score));
-    return { region_id, region_name, state, level: "district", capability_queried: capability, coverage_status: coverageMatrix[capability][index], facility_count: matching.length, avg_trust_score: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0 };
-  }),
-);
+export function mockDistrictNameForBoundary(shapeName: string): string {
+  return sourceDistrictAliases[normalizeStateName(shapeName)] ?? shapeName;
+}
+
+export function deriveDistrictCoverage(districtNames: string[], capability: CapabilityName): RegionCoverage[] {
+  return districtNames.map((shapeName) => {
+    const mockDistrict = mockDistrictNameForBoundary(shapeName);
+    const matching = facilities.filter((facility) => normalizeStateName(facility.location.district) === normalizeStateName(mockDistrict) && facility.capabilities.some((claim) => claim.name === capability));
+    const claimsForCapability = matching.flatMap((facility) => facility.capabilities.filter((claim) => claim.name === capability));
+    const scores = claimsForCapability.map((claim) => claim.trust_score);
+    const state = matching[0]?.location.state ?? geographies.find((item) => item.districts.some((district) => normalizeStateName(district.name) === normalizeStateName(mockDistrict)))?.state ?? "";
+    const coverage_status: CoverageStatus = claimsForCapability.some((claim) => claim.status === "verified") ? "verified_coverage" : claimsForCapability.some((claim) => claim.status === "claimed-only") ? "weak_coverage" : Array.from(shapeName).reduce((sum, character) => sum + character.charCodeAt(0), 0) % 3 === 0 ? "no_data" : "no_facility";
+    return { region_id: shapeName, region_name: shapeName, state, level: "district", capability_queried: capability, coverage_status, facility_count: matching.length, avg_trust_score: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0 };
+  });
+}
 
 export type ScenarioNote = { facility_id: string; note: string; timestamp: string };
 export type ScenarioOverride = { facility_id: string; capability: string; value: "accept" | "needs-review" | "reject"; reason: string; timestamp: string };

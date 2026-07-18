@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Facility, RegionCoverage } from "@/lib/mockData";
+import { mockDistrictNameForBoundary, normalizeStateName, type Facility, type RegionCoverage } from "@/lib/mockData";
 import { CoverageLegend, coverageLabels } from "./CoverageLegend";
 import { FacilityCard } from "./FacilityCard";
 import { MapView } from "./MapView";
@@ -11,11 +11,11 @@ type GeoCollection = Parameters<typeof MapView>[0]["geoJson"];
 
 export function MapExplorer({ capability, initialDistrict, coverage, facilities, geoJson }: { capability: string; initialDistrict?: string; coverage: RegionCoverage[]; facilities: Facility[]; geoJson: GeoCollection }) {
   const router = useRouter(); const params = useSearchParams();
-  const initial = coverage.find((item) => item.region_name === initialDistrict)?.region_id ?? coverage.find((item) => item.facility_count > 0)?.region_id ?? coverage[0]?.region_id ?? "";
+  const initial = coverage.find((item) => normalizeStateName(mockDistrictNameForBoundary(item.region_name)) === normalizeStateName(initialDistrict ?? ""))?.region_id ?? coverage.find((item) => item.facility_count > 0)?.region_id ?? coverage[0]?.region_id ?? "";
   const [selectedRegion, setSelectedRegion] = useState(initial); const [sort, setSort] = useState<"high" | "low">("high"); const [statusFilter, setStatusFilter] = useState("all");
   const selected = coverage.find((item) => item.region_id === selectedRegion);
   const selectRegion = useCallback((regionId: string) => setSelectedRegion(regionId), []);
-  const regionFacilities = useMemo(() => facilities.filter((facility) => facility.location.district === selected?.region_name).filter((facility) => statusFilter === "all" || facility.capabilities.find((claim) => claim.name === capability)?.status === statusFilter).sort((a, b) => { const aScore = a.capabilities.find((claim) => claim.name === capability)?.trust_score ?? 0; const bScore = b.capabilities.find((claim) => claim.name === capability)?.trust_score ?? 0; return sort === "high" ? bScore - aScore : aScore - bScore; }), [capability, facilities, selected?.region_name, sort, statusFilter]);
+  const regionFacilities = useMemo(() => facilities.filter((facility) => selected && normalizeStateName(facility.location.state) === normalizeStateName(selected.state)).filter((facility) => statusFilter === "all" || facility.capabilities.find((claim) => claim.name === capability)?.status === statusFilter).sort((a, b) => { const aScore = a.capabilities.find((claim) => claim.name === capability)?.trust_score ?? 0; const bScore = b.capabilities.find((claim) => claim.name === capability)?.trust_score ?? 0; return sort === "high" ? bScore - aScore : aScore - bScore; }), [capability, facilities, selected, sort, statusFilter]);
   const changeCapability = (next: string) => { const nextParams = new URLSearchParams(params.toString()); nextParams.set("capability", next); router.push(`/map?${nextParams}`); };
 
   return (
