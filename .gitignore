@@ -1,0 +1,34 @@
+# Local agent/workspace metadata
+.agents/
+.codex/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Dependencies and generated output
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+**/dist/
+*.tsbuildinfo
+
+# Logs and runtime files
+*.log
+*.pid
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment and secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Test and coverage artifacts
+**/coverage/
+**/.turbo/
