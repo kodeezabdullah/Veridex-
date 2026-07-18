@@ -1,0 +1,10 @@
+{"type":"FeatureCollection","name":"veridex-demo-districts","features":[
+{"type":"Feature","properties":{"region_id":"KA-BU","region_name":"Bengaluru Urban","state":"Karnataka"},"geometry":{"type":"Polygon","coordinates":[[[77.30,12.75],[77.88,12.75],[77.88,13.22],[77.30,13.22],[77.30,12.75]]]}},
+{"type":"Feature","properties":{"region_id":"KA-MY","region_name":"Mysuru","state":"Karnataka"},"geometry":{"type":"Polygon","coordinates":[[[76.35,11.95],[76.90,11.95],[76.90,12.55],[76.35,12.55],[76.35,11.95]]]}},
+{"type":"Feature","properties":{"region_id":"MH-PU","region_name":"Pune","state":"Maharashtra"},"geometry":{"type":"Polygon","coordinates":[[[73.55,18.20],[74.18,18.20],[74.18,18.85],[73.55,18.85],[73.55,18.20]]]}},
+{"type":"Feature","properties":{"region_id":"MH-MC","region_name":"Mumbai City","state":"Maharashtra"},"geometry":{"type":"Polygon","coordinates":[[[72.75,18.85],[73.02,18.85],[73.02,19.20],[72.75,19.20],[72.75,18.85]]]}},
+{"type":"Feature","properties":{"region_id":"OD-KH","region_name":"Khordha","state":"Odisha"},"geometry":{"type":"Polygon","coordinates":[[[85.45,19.85],[86.10,19.85],[86.10,20.55],[85.45,20.55],[85.45,19.85]]]}},
+{"type":"Feature","properties":{"region_id":"OD-CT","region_name":"Cuttack","state":"Odisha"},"geometry":{"type":"Polygon","coordinates":[[[85.70,20.35],[86.25,20.35],[86.25,20.85],[85.70,20.85],[85.70,20.35]]]}},
+{"type":"Feature","properties":{"region_id":"TN-CH","region_name":"Chennai","state":"Tamil Nadu"},"geometry":{"type":"Polygon","coordinates":[[[80.05,12.82],[80.38,12.82],[80.38,13.28],[80.05,13.28],[80.05,12.82]]]}},
+{"type":"Feature","properties":{"region_id":"TN-CO","region_name":"Coimbatore","state":"Tamil Nadu"},"geometry":{"type":"Polygon","coordinates":[[[76.68,10.75],[77.25,10.75],[77.25,11.35],[76.68,11.35],[76.68,10.75]]]}}
+]}

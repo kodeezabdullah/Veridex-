@@ -163,23 +163,25 @@ Accessibility requirements: visible keyboard focus, semantic labels, adequate co
 - [x] Project context and constraints recorded in this living document.
 - [x] Design tokens and base application shell established (warm mineral canvas, forest/verdigris palette, Georgia display typography, responsive shell, focus and reduced-motion states).
 - [x] Screen 1 selector built against India-consistent mock geography with cascading state → district → city → PIN controls and query-param navigation to `/map`.
-- [ ] Map and coverage legend built.
-- [ ] Facility list built.
-- [ ] Facility detail and evidence highlighting built.
-- [ ] Scenario persistence implemented and tested across sessions.
+- [x] Map and coverage legend built with MapLibre GL JS + Deck.gl, district selection, facility point markers, all four semantic statuses, and explicit diagonal hatching for `no_data`.
+- [x] Facility list built inside the map flow with claim-status filtering, trust-score sorting, evidence previews, and explicit `no_data` vs confirmed-gap empty states.
+- [x] Facility detail and evidence highlighting built with claim tabs, exact `text_span` highlighting inside `raw_fields`, confidence/trust context, completeness indicators, planner notes, and manual dispositions.
+- [x] Scenario workspace implemented with create, rename, delete, shortlist removal, saved notes, overrides, and persistence across browser sessions via a versioned `localStorage` adapter behind `lib/api.ts`.
 - [ ] Databricks Apps deployment configured and smoke-tested.
 
 ## Open decisions and risks
 
-- Persistence provider: Lakebase vs Supabase/PostGIS, decided after a time-boxed connectivity/setup spike.
+- Persistence provider: the functional mock uses browser `localStorage` through `lib/api.ts`. This is durable for the demo browser but is not shared or multi-user. Lakebase remains the preferred production provider; Supabase/PostGIS is the fallback once credentials and connectivity are available.
 - Final facility and region list response envelopes need backend confirmation.
 - Geography reference data and canonical state/district/city/PIN hierarchy need backend alignment.
 - The example contract labels Punjab/Faisalabad with PIN `38000`, which is not an India-consistent location. Treat it as an opaque shape example; use India-consistent mock geography in the UI and confirm backend data quality expectations.
-- GeoJSON source, license, simplification level, and join-key mapping remain to be chosen.
+- Production GeoJSON source, license, simplification level, and join-key mapping remain to be chosen. `public/geojson/demo-districts.json` is a deliberately small rectangular demo fixture for interaction/state testing and must not be represented as authoritative district boundaries.
 - Databricks Apps runtime environment variables, build command, health check, and persistent data connectivity need early validation.
 - `/map` is the next implementation target; Screen 1 currently routes there but the route is intentionally not scaffolded ahead of the specified build order.
 - Screen 1 verification: `npm run lint` and `npm run build` pass on Next.js 16.2.10; `/` is statically prerendered and standalone output is enabled.
 - Dependency audit after upgrading from vulnerable Next.js 16.1.6 to 16.2.10 reports two moderate findings for Next.js's bundled PostCSS `<8.5.10`. npm offers only an invalid breaking downgrade (`next@9.3.3`) via `audit fix --force`; do not apply it. Recheck when Next.js ships a release bundling patched PostCSS.
+- Full frontend verification on 2026-07-19: `npm run lint` and `npm run build` pass. Dev-server HTTP checks returned 200 for `/`, `/map?capability=ICU`, `/facility/f_00123?capability=ICU`, and `/scenarios`, with no Next error markers or server stderr. Browser automation could not run because the `agent-browser` CLI is unavailable in the environment; manually verify map clicks, responsive layout, and localStorage reload behavior before demo.
+- Git/GitHub work is explicitly paused by the user until the frontend is functionally complete. Do not commit, configure remotes, push, or modify authorship unless the user explicitly resumes that work.
 
 ## Working conventions
 
@@ -188,4 +190,4 @@ Accessibility requirements: visible keyboard focus, semantic labels, adequate co
 - Work only inside `frontend/`; do not touch `/backend`.
 - Keep backend/mock switching isolated to `lib/api.ts`.
 - Preserve evidence, confidence, and uncertainty in every relevant UI state.
-- Make small, focused commits using the user's Git identity and no AI attribution or co-author lines. Pull before pushing when a remote repository exists.
+- When the user explicitly resumes Git work, make small focused commits using their Git identity with no AI attribution or co-author lines. Until then, make no Git/GitHub changes.
