@@ -14,9 +14,7 @@ DOTENV_PATH = Path(__file__).resolve().with_name(".env")
 load_dotenv(dotenv_path=DOTENV_PATH, override=True)
 
 REQUIRED_DATABRICKS_ENV = (
-    "DATABRICKS_SERVER_HOSTNAME",
     "DATABRICKS_HTTP_PATH",
-    "DATABRICKS_TOKEN",
 )
 
 
@@ -31,6 +29,10 @@ _connection_lock = RLock()
 def get_connection():
     """Create a Databricks SQL connection after validating configuration lazily."""
     missing = [name for name in REQUIRED_DATABRICKS_ENV if not os.getenv(name, "").strip()]
+    has_pat = bool(os.getenv("DATABRICKS_TOKEN", "").strip())
+    has_app_oauth = bool(os.getenv("DATABRICKS_CLIENT_ID", "").strip() and os.getenv("DATABRICKS_CLIENT_SECRET", "").strip())
+    if not has_pat and not has_app_oauth:
+        missing.append("DATABRICKS_TOKEN or DATABRICKS_CLIENT_ID/DATABRICKS_CLIENT_SECRET")
     if missing:
         names = ", ".join(missing)
         raise DatabricksConfigurationError(
@@ -40,11 +42,13 @@ def get_connection():
     global _connection
     with _connection_lock:
         if _connection is None:
-            _connection = sql.connect(
-                server_hostname=os.environ["DATABRICKS_SERVER_HOSTNAME"],
-                http_path=os.environ["DATABRICKS_HTTP_PATH"],
-                access_token=os.environ["DATABRICKS_TOKEN"],
-            )
+            hostname = os.getenv("DATABRICKS_SERVER_HOSTNAME", "") or os.getenv("DATABRICKS_HOST", "").replace("https://", "").rstrip("/")
+            options = {"server_hostname": hostname, "http_path": os.environ["DATABRICKS_HTTP_PATH"]}
+            if has_pat:
+                options["access_token"] = os.environ["DATABRICKS_TOKEN"]
+            else:
+                options.update({"auth_type": "oauth-m2m", "client_id": os.environ["DATABRICKS_CLIENT_ID"], "client_secret": os.environ["DATABRICKS_CLIENT_SECRET"]})
+            _connection = sql.connect(**options)
         return _connection
 
 

@@ -1,1 +1,4 @@
 command: ["npm", "run", "start"]
+env:
+  - name: DATABRICKS_HTTP_PATH
+    value: "/sql/1.0/warehouses/7db2622b33efa8b1"
