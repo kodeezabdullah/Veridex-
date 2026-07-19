@@ -1,0 +1,11 @@
+{
+  "name": "veridex-app",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "start": "concurrently -k \"npm --prefix frontend run start\" \"python -m uvicorn backend.main:app --host 127.0.0.1 --port 8001\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

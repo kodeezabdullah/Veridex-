@@ -9,9 +9,10 @@ import {
   type CapabilityName,
   type RegionCoverage,
 } from "@/lib/types";
+import { WorkspaceRail } from "@/components/WorkspaceRail";
 
-function compareNames(left: string, right: string) {
-  return left.localeCompare(right, "en-IN", { sensitivity: "base" });
+function compareNames(a: string, b: string) {
+  return a.localeCompare(b, "en-IN", { sensitivity: "base" });
 }
 
 export function CoverageSelector({
@@ -30,9 +31,7 @@ export function CoverageSelector({
 
   const states = useMemo(
     () =>
-      Array.from(
-        new Set(coverage.map((region) => region.state.trim()).filter(Boolean)),
-      ).sort(compareNames),
+      Array.from(new Set(coverage.map((r) => r.state.trim()).filter(Boolean))).sort(compareNames),
     [coverage],
   );
 
@@ -41,156 +40,123 @@ export function CoverageSelector({
       Array.from(
         new Set(
           coverage
-            .filter(
-              (region) =>
-                state &&
-                normalizeName(region.state) === normalizeName(state),
-            )
-            .map((region) => region.region_name.trim())
+            .filter((r) => state && normalizeName(r.state) === normalizeName(state))
+            .map((r) => r.region_name.trim())
             .filter(Boolean),
         ),
       ).sort(compareNames),
     [coverage, state],
   );
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     if (!state || !district) return;
     const params = new URLSearchParams({ capability, state, district });
     router.push(`/map?${params.toString()}`);
   };
 
   return (
-    <main className="landing-shell">
-      <header className="site-header">
+    <div className="page-shell-with-rail"><WorkspaceRail /><main className="landing-dark">
+      <header className="landing-dark-header">
         <Link href="/" className="brand">
-          <span className="brand-mark" aria-hidden="true">V</span>
+          <span className="brand-mark">V</span>
           <span>Veridex</span>
         </Link>
-        <span className="header-context">
-          <i className="header-rule" /> Medical desert planner
-        </span>
-        <Link href="/scenarios" className="saved-link">
-          Planning scenarios <span aria-hidden="true">→</span>
-        </Link>
+        <nav className="landing-dark-nav">
+          <Link href="/scenarios">Planning scenarios →</Link>
+        </nav>
       </header>
 
-      <section className="hero">
-        <div className="hero-copy">
+      <div className="landing-dark-body">
+        <div className="landing-dark-copy">
           <p className="eyebrow">Evidence-led regional planning</p>
           <h1>
             Find care gaps.<br />
             <em>Know the evidence.</em>
           </h1>
-          <p className="hero-intro">
+          <p>
             Select a healthcare capability and district to inspect trust-weighted
-            coverage and the facility evidence behind it.
+            coverage and the facility evidence behind every signal.
           </p>
-          <div className="status-key" aria-label="Coverage status key">
-            <span><i className="verified" /> Verified coverage</span>
-            <span><i className="claimed" /> Weak coverage</span>
-            <span><i className="gap" /> No facility found</span>
-            <span><i className="unknown" /> No data</span>
+          <div className="landing-dark-badges">
+            <span className="landing-dark-badge"><i style={{ background: "#059669" }} /> Verified coverage</span>
+            <span className="landing-dark-badge"><i style={{ background: "#f59e0b" }} /> Weak coverage</span>
+            <span className="landing-dark-badge"><i style={{ background: "#ef4444" }} /> No facility found</span>
+            <span className="landing-dark-badge"><i style={{ background: "#94a3b8" }} /> No data</span>
           </div>
         </div>
 
-        <form className="search-panel" onSubmit={submit}>
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Coverage selector</p>
-              <h2>Choose an area to review</h2>
-            </div>
-            <p className="panel-note">
-              Results describe indexed evidence, not a recommendation or final
-              planning decision.
-            </p>
+        <form className="landing-dark-panel" onSubmit={submit}>
+          <h2>Choose an area</h2>
+          <p className="landing-dark-panel-sub">
+            Results describe indexed evidence — not a recommendation or final planning decision.
+          </p>
+
+          <label className="dark-field-label" htmlFor="capability">Capability</label>
+          <div className="dark-select-wrap">
+            <select
+              id="capability"
+              value={capability}
+              onChange={(e) => setCapability(e.target.value as CapabilityName)}
+            >
+              {capabilities.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <span className="dark-select-chevron">▾</span>
           </div>
 
-          <fieldset className="field-group">
-            <label className="field-label" htmlFor="capability">
-              Capability <span>Required</span>
-            </label>
-            <span className="select-shell">
-              <select
-                id="capability"
-                value={capability}
-                onChange={(event) =>
-                  setCapability(event.target.value as CapabilityName)
-                }
-              >
-                {capabilities.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <span className="select-chevron" aria-hidden="true">⌄</span>
-            </span>
-            <p className="field-hint">
-              Coverage is calculated independently for each clinical capability.
-            </p>
-          </fieldset>
+          <div className="dark-divider" />
 
-          <div className="rule" />
-
-          <div className="region-grid">
-            <label className="region-field" htmlFor="state">
-              <span>State</span>
-              <span className="select-shell compact">
+          <div className="dark-region-grid">
+            <div>
+              <span className="dark-region-label">State</span>
+              <div className="dark-select-wrap" style={{ marginBottom: 0 }}>
                 <select
-                  id="state"
                   value={state}
-                  onChange={(event) => {
-                    setState(event.target.value);
-                    setDistrict("");
-                  }}
+                  onChange={(e) => { setState(e.target.value); setDistrict(""); }}
                 >
-                  <option value="">Select a state</option>
-                  {states.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
+                  <option value="">Select state</option>
+                  {states.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <span className="select-chevron" aria-hidden="true">⌄</span>
-              </span>
-            </label>
-
-            <label className="region-field" htmlFor="district">
-              <span>District</span>
-              <span className="select-shell compact">
+                <span className="dark-select-chevron">▾</span>
+              </div>
+            </div>
+            <div>
+              <span className="dark-region-label">District</span>
+              <div className="dark-select-wrap" style={{ marginBottom: 0 }}>
                 <select
-                  id="district"
                   value={district}
-                  onChange={(event) => setDistrict(event.target.value)}
+                  onChange={(e) => setDistrict(e.target.value)}
                   disabled={!state}
                 >
-                  <option value="">
-                    {state ? "Select a district" : "Choose a state first"}
-                  </option>
-                  {districts.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
+                  <option value="">{state ? "Select district" : "Choose state first"}</option>
+                  {districts.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
-                <span className="select-chevron" aria-hidden="true">⌄</span>
-              </span>
-            </label>
+                <span className="dark-select-chevron">▾</span>
+              </div>
+            </div>
           </div>
 
-          <div className="form-footer">
-            <p><i className="pulse-dot" /> {states.length} states indexed</p>
+          <div className="dark-submit-row">
+            <span className="dark-submit-hint">
+              <span className="dark-pulse" />
+              {states.length} states indexed
+            </span>
             <button
-              className="search-button"
+              className="dark-submit-btn"
               type="submit"
               disabled={!state || !district || Boolean(dataError)}
             >
-              View Coverage <span aria-hidden="true">→</span>
+              View Coverage →
             </button>
           </div>
-          {dataError && <p className="api-error" role="alert">{dataError}</p>}
+          {dataError && <p className="dark-api-error" role="alert">{dataError}</p>}
         </form>
-      </section>
+      </div>
 
-      <footer className="landing-footer">
+      <footer className="landing-dark-footer">
         <p>Decision support only · Confirm facility services directly</p>
-        <span>District-level coverage</span>
+        <p>District-level coverage · India ADM2</p>
       </footer>
-    </main>
+    </main></div>
   );
 }

@@ -1,8 +1,8 @@
 import type { CoverageStatus } from "./types";
 
 export const COVERAGE_COLORS: Record<CoverageStatus, string> = {
-  verified_coverage: "#4f8064",
-  weak_coverage: "#d7a53f",
-  no_facility: "#b4523e",
-  no_data: "#9a9d97",
+  verified_coverage: "#059669",
+  weak_coverage: "#d97706",
+  no_facility: "#dc2626",
+  no_data: "#94a3b8",
 };

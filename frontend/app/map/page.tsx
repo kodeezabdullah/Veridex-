@@ -1,4 +1,3 @@
-import { AppHeader } from "@/components/AppHeader";
 import { MapExplorer } from "@/components/MapExplorer";
 import { getFacilities, getRegionCoverage } from "@/lib/api";
 import { getCoverageGeoJson } from "@/lib/api.server";
@@ -10,12 +9,12 @@ export default async function MapPage({ searchParams }: { searchParams: Promise<
   const district = typeof query.district === "string" ? query.district : undefined;
   const data = await Promise.all([
       getRegionCoverage(capability),
-      getFacilities({ capability, state, district }),
+      state && district ? getFacilities({ capability, state, district }) : Promise.resolve([]),
       getCoverageGeoJson(),
     ]).catch(() => null);
   if (!data) {
-    return <><AppHeader section="Facility list" /><main className="data-unavailable"><span aria-hidden="true">!</span><h1>Coverage data unavailable</h1><p>Configure the real backend API and verify its facilities and region coverage endpoints.</p></main></>;
+    return <main className="data-unavailable"><span aria-hidden="true">!</span><h1>Coverage data unavailable</h1><p>Configure the real backend API and verify its facilities and region coverage endpoints.</p></main>;
   }
   const [coverage, facilities, geoJson] = data;
-  return <><AppHeader section="Facility list" /><MapExplorer capability={capability} initialDistrict={district} coverage={coverage} facilities={facilities} geoJson={geoJson as Parameters<typeof MapExplorer>[0]["geoJson"]} /></>;
+  return <MapExplorer capability={capability} initialDistrict={district} coverage={coverage} facilities={facilities} geoJson={geoJson as Parameters<typeof MapExplorer>[0]["geoJson"]} />;
 }

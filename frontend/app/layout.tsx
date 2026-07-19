@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AppBootGate } from "@/components/AppBootGate";
 
 export const metadata: Metadata = {
   title: "Veridex — Evidence-led care coverage",
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><AppBootGate>{children}</AppBootGate></body>
     </html>
   );
 }

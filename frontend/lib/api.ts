@@ -81,13 +81,14 @@ function readBoolean(record: JsonRecord, ...keys: string[]): boolean {
   return false;
 }
 
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8010";
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:8001";
+const SERVER_READ_CACHE_TTL = 30_000;
+const serverReadCache = new Map<string, { expiresAt: number; payload: unknown }>();
+const serverReadInflight = new Map<string, Promise<unknown>>();
 
 function apiUrl(path: string): string {
-  const publicBase = (
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL
-  ).replace(/\/$/, "");
-  if (typeof window !== "undefined") return `${publicBase}${path}`;
+  if (typeof window !== "undefined") return path;
+  const publicBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
 
   const serverBase = (
     process.env.VERIDEX_API_BASE_URL ?? publicBase
@@ -99,24 +100,48 @@ async function requestJson(
   path: string,
   init: RequestInit = {},
 ): Promise<unknown> {
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...init.headers,
-    },
-  });
-  if (!response.ok) {
-    const detail = (await response.text()).trim();
-    throw new ApiError(
-      `API request failed (${response.status})${detail ? `: ${detail}` : ""}`,
-      response.status,
-    );
+  const method = (init.method ?? "GET").toUpperCase();
+  const cacheableServerRead = typeof window === "undefined"
+    && method === "GET"
+    && (path.startsWith("/api/regions/coverage") || path.startsWith("/api/facilities"));
+  if (cacheableServerRead) {
+    const cached = serverReadCache.get(path);
+    if (cached && cached.expiresAt > Date.now()) return cached.payload;
+    const inflight = serverReadInflight.get(path);
+    if (inflight) return inflight;
   }
-  if (response.status === 204) return null;
-  return response.json() as Promise<unknown>;
+
+  const load = async () => {
+    const response = await fetch(apiUrl(path), {
+      ...init,
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...init.headers,
+      },
+    });
+    if (!response.ok) {
+      const detail = (await response.text()).trim();
+      throw new ApiError(
+        `API request failed (${response.status})${detail ? `: ${detail}` : ""}`,
+        response.status,
+      );
+    }
+    if (response.status === 204) return null;
+    return response.json() as Promise<unknown>;
+  };
+
+  if (!cacheableServerRead) return load();
+  const request = load();
+  serverReadInflight.set(path, request);
+  try {
+    const payload = await request;
+    serverReadCache.set(path, { expiresAt: Date.now() + SERVER_READ_CACHE_TTL, payload });
+    return payload;
+  } finally {
+    serverReadInflight.delete(path);
+  }
 }
 
 function unwrapList(payload: unknown, key: string): unknown[] {
