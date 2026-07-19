@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from threading import Thread
 
 from backend.db import warm_up
 from backend.routers import coverage, facilities, scenarios, validation
@@ -29,10 +30,21 @@ app.include_router(validation.router)
 
 @app.on_event("startup")
 def warm_databricks_warehouse() -> None:
+    result: list[BaseException] = []
+    worker = Thread(target=lambda: _run_warmup(result), daemon=True)
+    worker.start()
+    worker.join(timeout=35)
+    if worker.is_alive():
+        raise TimeoutError("Databricks warm-up SELECT 1 exceeded 35 seconds; check app service-principal permissions on the SQL warehouse.")
+    if result:
+        raise RuntimeError(f"Databricks warm-up SELECT 1 failed: {result[0]}") from result[0]
+
+
+def _run_warmup(result: list[BaseException]) -> None:
     try:
         warm_up()
-    except Exception:
-        logging.getLogger(__name__).warning("Databricks warm-up query failed; live endpoints will retry on demand", exc_info=True)
+    except BaseException as error:
+        result.append(error)
 
 
 @app.get("/health")
