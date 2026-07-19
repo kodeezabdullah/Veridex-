@@ -75,10 +75,12 @@ def _lakebase_endpoint(
 
 
 def _database_token(settings: dict[str, str]) -> str:
+    print("LAKEBASE STARTUP: before WorkspaceClient()", flush=True)
     workspace_host = settings["DATABRICKS_SERVER_HOSTNAME"]
     if not workspace_host.startswith(("http://", "https://")):
         workspace_host = f"https://{workspace_host}"
     client = _workspace_client(workspace_host, settings["DATABRICKS_TOKEN"])
+    print("LAKEBASE STARTUP: WorkspaceClient() ready", flush=True)
     endpoint_name = _lakebase_endpoint(
         workspace_host,
         settings["DATABRICKS_TOKEN"],
@@ -87,6 +89,7 @@ def _database_token(settings: dict[str, str]) -> str:
     credential = client.postgres.generate_database_credential(
         endpoint=endpoint_name
     )
+    print("LAKEBASE STARTUP: credential generated", flush=True)
     token = getattr(credential, "token", None)
     if not token:
         raise LakebaseConfigurationError(

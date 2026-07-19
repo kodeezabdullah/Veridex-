@@ -30,10 +30,13 @@ app.include_router(validation.router)
 
 @app.on_event("startup")
 def warm_databricks_warehouse() -> None:
+    print("STARTUP: warm_databricks_warehouse entered", flush=True)
     result: list[BaseException] = []
     worker = Thread(target=lambda: _run_warmup(result), daemon=True)
     worker.start()
+    print("STARTUP: warm-up worker started", flush=True)
     worker.join(timeout=35)
+    print("STARTUP: warm-up worker join returned", flush=True)
     if worker.is_alive():
         raise TimeoutError("Databricks warm-up SELECT 1 exceeded 35 seconds; check app service-principal permissions on the SQL warehouse.")
     if result:

@@ -39,13 +39,17 @@ def get_connection():
     global _connection
     with _connection_lock:
         if _connection is None:
+            print("STARTUP: before Config()", flush=True)
             cfg = Config()
+            print("STARTUP: Config() created", flush=True)
+            print("STARTUP: before sql.connect()", flush=True)
             _connection = sql.connect(
                 server_hostname=cfg.host,
                 http_path=os.environ["DATABRICKS_HTTP_PATH"],
                 credentials_provider=lambda: cfg.authenticate,
                 _socket_timeout=30,
             )
+            print("STARTUP: sql.connect() returned", flush=True)
         return _connection
 
 
@@ -61,7 +65,9 @@ def _drop_connection() -> None:
 
 def warm_up() -> None:
     """Wake the warehouse with a lightweight query during application startup."""
+    print("STARTUP: before cursor.execute", flush=True)
     query("SELECT 1")
+    print("STARTUP: warm-up query complete", flush=True)
 
 
 def query(sql_text: str, params: Sequence[Any] | Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
