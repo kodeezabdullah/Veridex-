@@ -18,6 +18,14 @@ export type FacilityFilters = {
   pin?: string;
 };
 
+export type ValidationSummary = {
+  total_rows: number;
+  keyword_confirmation: { eligible_rows: number; confirmed_rows: number; rate_pct: number };
+  validator_flagged_rows: number;
+  validator_flag_rate_pct: number;
+  validator_rules: { rule: string; flagged_rows: number; rate_pct: number }[];
+};
+
 type JsonRecord = Record<string, unknown>;
 
 export class ApiError extends Error {
@@ -436,6 +444,10 @@ export async function getRegionCoverage(
   return unwrapList(payload, "regions")
     .map(normalizeCoverage)
     .filter((region): region is RegionCoverage => region !== null);
+}
+
+export async function getValidationSummary(): Promise<ValidationSummary> {
+  return (await requestJson("/api/validation/summary")) as ValidationSummary;
 }
 
 export async function getScenarios(): Promise<Scenario[]> {

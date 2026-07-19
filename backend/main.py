@@ -2,8 +2,10 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 
-from backend.routers import coverage, facilities, scenarios
+from backend.db import warm_up
+from backend.routers import coverage, facilities, scenarios, validation
 
 app = FastAPI(
     title="Veridex API",
@@ -22,6 +24,15 @@ app.add_middleware(
 app.include_router(facilities.router)
 app.include_router(coverage.router)
 app.include_router(scenarios.router)
+app.include_router(validation.router)
+
+
+@app.on_event("startup")
+def warm_databricks_warehouse() -> None:
+    try:
+        warm_up()
+    except Exception:
+        logging.getLogger(__name__).warning("Databricks warm-up query failed; live endpoints will retry on demand", exc_info=True)
 
 
 @app.get("/health")

@@ -1243,6 +1243,15 @@ a { color: inherit; text-decoration: none; }
 @keyframes heartbeat { 0%, 100% { transform: scale(.8); opacity: .55; } 18% { transform: scale(1.15); opacity: 1; } 32% { transform: scale(.85); } 48% { transform: scale(1.05); opacity: .9; } 65% { transform: scale(.8); opacity: .55; } }
 .analytics-info-box { display: grid; gap: 4px; margin: 0 0 20px; padding: 14px 16px; border-left: 3px solid #6ba77b; background: #edf8ef; color: #547061; font-size: 12px; line-height: 1.5; }
 .analytics-info-box strong { color: #285b3b; font-size: 12px; }
+.validation-card { margin-top: 18px; }
+.validation-chart { display: grid; gap: 13px; padding-top: 5px; }
+.validation-row { display: grid; grid-template-columns: 180px minmax(0, 1fr) 48px; gap: 10px; align-items: center; font-size: 11px; }
+.validation-row b { color: #37684b; text-align: right; }
+.validation-row small { grid-column: 2 / 4; color: #829487; font-size: 10px; margin-top: -7px; }
+.validation-bar { background: #5c9a71; }
+.qa-card ul { display: grid; gap: 9px; margin: 0; padding-left: 18px; color: #647b6c; font-size: 12px; line-height: 1.45; }
+.qa-card li::marker { color: #5c9a71; }
+@media (max-width: 600px) { .validation-row { grid-template-columns: 125px minmax(0, 1fr) 42px; gap: 7px; } }
 .chart-card { margin-top: 18px; }
 .chart-legend { display: flex; align-items: center; gap: 5px; color: #7d9183; font-size: 10px; }
 .chart-legend i { width: 8px; height: 8px; display: inline-block; border-radius: 50%; margin-left: 6px; }
