@@ -17,14 +17,14 @@ The planner-facing product helps users search for a healthcare capability in a g
 - Deployment: Databricks Apps using Next.js/Node
 - `next.config` must use `output: "standalone"` before deployment
 - All UI data access goes through `lib/api.ts`; components must never call `fetch()` directly
-- During mock development, `lib/api.ts` reads `lib/mockData.ts` while retaining backend-compatible JSON shapes
+- `lib/api.ts` calls the real backend endpoints and normalizes their response envelopes; unavailable APIs produce explicit error states rather than substituted records
 
 ## Screens and user flow
 
-1. **Chat-driven evidence map (`/`)**: The full-screen MapLibre + Deck.gl map is the primary landing view with a docked conversational agent. Natural-language queries replace the retired categorical selector. A response changes capability coverage, smoothly flies to matching districts, emphasizes matched facility markers, and remains visible in conversation history.
-2. **Facility marker popup (within `/`)**: Clicking a marker opens a custom evidence card with facility name, claim/trust status, exact evidence snippet, and a link to the full evidence record. Coverage polygons are real district-level ADM2 boundaries.
+1. **Coverage selector (`/`)**: The landing screen uses structured capability, state, and district dropdowns. District options cascade from the selected state using distinct `region_coverage` rows. Submitting navigates to the trust-weighted map/results workspace with `capability`, `state`, and `district` query parameters; there is no free-text or chat interaction in this track.
+2. **Facility marker popup (within `/map`)**: Clicking a marker opens a custom evidence card with facility name, claim/trust status, exact evidence snippet, and a link to the full evidence record. Coverage polygons are real district-level ADM2 boundaries.
 3. **Facility list (`/map`)**: The existing list-oriented map workspace remains available as a secondary view. Facility cards show name, claimed capabilities, evidence-aware trust status, and trust score with filtering and sorting.
-4. **Facility detail (`/facility/[id]`)**: Full profile and evidence view. Each claim shows `verified`, `claimed-only`, or `no-signal`, confidence, and the exact `text_span` highlighted in the corresponding `raw_fields` value. Notes and overrides are explicit planner inputs; the UI does not decide for them.
+4. **Facility detail (`/facility/[id]`)**: Full profile and evidence view. Each claim shows its final `verified`, `likely`, `weak_signal`, or `no_signal` status, confidence, and the exact `text_span` highlighted in the corresponding `raw_fields` value. Notes and overrides are explicit planner inputs; the UI does not decide for them.
 5. **Scenarios (`/scenarios`)**: Saved facilities, notes, and overrides persisted across sessions in Lakebase or Supabase/PostGIS.
 
 ## Coverage semantics
@@ -32,7 +32,7 @@ The planner-facing product helps users search for a healthcare capability in a g
 Coverage status is always one of:
 
 - `verified_coverage`: corroborated claims; green treatment
-- `weak_coverage`: claimed-only evidence; amber treatment
+- `weak_coverage`: weak supporting evidence; amber treatment
 - `no_facility`: a confirmed gap; red treatment
 - `no_data`: insufficient knowledge, never equivalent to a confirmed gap; grey hatched/pattern treatment everywhere it appears
 
@@ -121,23 +121,14 @@ Returns facility records (the supplied contract presents a single record shape):
 
 Open API question: confirm whether list endpoints wrap arrays (for example `{ "facilities": [] }`) or return bare arrays. Keep normalization inside `lib/api.ts` so components remain unaffected.
 
-### `queryAgent(message: string)` — mocked integration seam
+### Structured selector integration seam
 
-The landing chat calls only `lib/api.ts::queryAgent`. The current implementation waits 600ms and uses keyword matching for capability, state, district, and city against mock data. Replace only this function’s internals when the backend agent is ready; callers depend on this exact response:
-
-```json
-{
-  "reply": "Found 2 facilities with ICU signals in Karnataka. I’ve focused the map and highlighted the matching facilities; open a marker to inspect trust and source evidence.",
-  "capability": "ICU",
-  "region": {
-    "state": "Karnataka",
-    "district": null
-  },
-  "matched_facility_ids": ["f_00123", "f_00456"]
-}
-```
-
-`capability` is one of the canonical capability names. `state` and `district` are nullable canonical geography names. `matched_facility_ids` contains only facility IDs already represented by the facility contract. The reply must describe evidence found without making a planning decision.
+The landing selector receives district coverage rows and derives distinct state
+and district options from them. It navigates to
+`/map?capability=&state=&district=`. Backend requests use the final handoff
+contract: `GET /api/regions/coverage?capability=` and
+`GET /api/facilities?capability=&state=&district=`. Components do not parse or
+send natural-language queries.
 
 ## Intended folder structure
 
@@ -149,12 +140,12 @@ frontend/
     facility/[id]/page.tsx
     scenarios/page.tsx
   components/
-    ChatMapExperience.tsx
+    CoverageSelector.tsx
     MapView.tsx
     FacilityCard.tsx
     EvidenceView.tsx
   lib/
-    mockData.ts
+    types.ts
     api.ts
   public/geojson/
   AGENTS.md
@@ -180,31 +171,32 @@ Accessibility requirements: visible keyboard focus, semantic labels, adequate co
 
 - [x] Project context and constraints recorded in this living document.
 - [x] Design tokens and base application shell established (warm mineral canvas, forest/verdigris palette, Georgia display typography, responsive shell, focus and reduced-motion states).
-- [x] Original categorical Screen 1 retired and replaced by a full-screen chat-driven evidence map on `/`, with conversational history, suggestions, typing state, mock agent response, animated regional focus, matched markers, and premium facility popups.
+- [x] Selection-based Screen 1 implemented on `/` with the six canonical capabilities and cascading state/district dropdowns derived from region coverage; submission opens the map/results workspace with structured parameters.
 - [x] Map and coverage legend built with MapLibre GL JS + Deck.gl, district selection, facility point markers, all four semantic statuses, and explicit diagonal hatching for `no_data`.
 - [x] Facility list built inside the map flow with claim-status filtering, trust-score sorting, evidence previews, and explicit `no_data` vs confirmed-gap empty states.
 - [x] Facility detail and evidence highlighting built with claim tabs, exact `text_span` highlighting inside `raw_fields`, confidence/trust context, completeness indicators, planner notes, and manual dispositions.
-- [x] Scenario workspace implemented with create, rename, delete, shortlist removal, saved notes, overrides, and persistence across browser sessions via a versioned `localStorage` adapter behind `lib/api.ts`.
+- [x] Scenario workspace uses the backend scenario, shortlist, notes, and overrides endpoints; it never substitutes seeded browser data when the API is unavailable.
+- [x] Hardcoded facilities, geography menus, generated coverage states, and seeded scenarios removed; canonical types remain in `lib/types.ts` and all records come from the real API.
 - [ ] Databricks Apps deployment configured and smoke-tested.
 
 ## Open decisions and risks
 
-- Persistence provider: the functional mock uses browser `localStorage` through `lib/api.ts`. This is durable for the demo browser but is not shared or multi-user. Lakebase remains the preferred production provider; Supabase/PostGIS is the fallback once credentials and connectivity are available.
+- Persistence depends on the backend Lakebase scenario endpoints documented in the final handoff.
 - Final facility and region list response envelopes need backend confirmation.
 - Geography reference data and canonical state/district/city/PIN hierarchy need backend alignment.
-- The example contract labels Punjab/Faisalabad with PIN `38000`, which is not an India-consistent location. Treat it as an opaque shape example; use India-consistent mock geography in the UI and confirm backend data quality expectations.
-- Real simplified India ADM2 geometry is active and keyed by exact district `shapeName`. Explicit aliases bridge source names such as `Bangalore`, `Mysore`, and `Mumbai` to mock-data names `Bengaluru Urban`, `Mysuru`, and `Mumbai City`. Retain geoBoundaries ODbL attribution in public deployment.
+- Real simplified India ADM2 geometry is active and keyed by exact district `shapeName`. Backend `region_name` values must align with those boundary names. Retain geoBoundaries ODbL attribution in public deployment.
 - Databricks Apps runtime environment variables, build command, health check, and persistent data connectivity need early validation.
-- `/map` remains as a secondary facility-list workspace; `/` is the primary map and agent experience.
+- `/` is the selection entry point; `/map` is the trust-weighted map and facility-results workspace.
 - Screen 1 verification: `npm run lint` and `npm run build` pass on Next.js 16.2.10; `/` is statically prerendered and standalone output is enabled.
 - Dependency audit after upgrading from vulnerable Next.js 16.1.6 to 16.2.10 reports two moderate findings for Next.js's bundled PostCSS `<8.5.10`. npm offers only an invalid breaking downgrade (`next@9.3.3`) via `audit fix --force`; do not apply it. Recheck when Next.js ships a release bundling patched PostCSS.
-- Full frontend verification on 2026-07-19: `npm run lint` and `npm run build` pass. Dev-server HTTP checks returned 200 for `/`, `/map?capability=ICU`, `/facility/f_00123?capability=ICU`, and `/scenarios`, with no Next error markers or server stderr. Browser automation could not run because the `agent-browser` CLI is unavailable in the environment; manually verify map clicks, responsive layout, and localStorage reload behavior before demo.
+- Full frontend verification on 2026-07-19: `npm run lint` and `npm run build` pass. Browser automation could not run because the `agent-browser` CLI is unavailable in the environment; manually verify map clicks and responsive layout against the live backend before demo.
 - Map rendering fix verified on 2026-07-19 through Chrome DevTools Protocol: `.map-canvas`, the MapLibre canvas, and `.deck-canvas` all inherit the full `.map-stage` height (560px at the narrow breakpoint; 708px at 1440×900). The map uses no-key CARTO Positron raster tiles, native MapLibre GeoJSON fill/pattern/border layers for coverage, a generated hatch pattern for `no_data`, and Deck.gl facility markers. All sampled CARTO tiles returned HTTP 200 with no browser errors.
-- Chat/map pivot verified on 2026-07-19 through Chrome DevTools Protocol at 1440×900. Querying “ICU coverage in Karnataka” produced the documented mock reply, retained the three-message conversation trail, flew to Karnataka’s coverage geometry, outlined the matching region, and enlarged two matched markers. Clicking `f_00456` opened a custom animated popup showing claimed-only, 58/100 trust, the evidence text “hospital website describes ICU,” and a working full-evidence link. No browser exceptions were observed; build and lint passed.
-- ADM2 boundary pivot: coverage is generated for all 735 real district `shapeName` keys. Facility counts/trust aggregate by district; known claims produce verified/weak coverage and unmatched districts alternate deterministically between confirmed-gap and no-data. The four canonical colors are centralized in `lib/coverage.ts`. Natural-language state queries focus the indexed mock districts within that state; district/city queries focus the matching ADM2 shape. Default camera starts at `[78.9, 22.5]`, zoom 4, then responsively fits India-wide bounds with overlay-aware padding. The desktop chat column remains 460px and chat body/input/suggestion text was enlarged for readability.
+- ADM2 boundary rendering uses the real geoBoundaries file while every coverage status, facility count, trust score, and facility marker comes from backend API responses. The four canonical colors are centralized in `lib/coverage.ts`.
 - ADM2 browser verification on 2026-07-19: fresh loads at 1440x900 and 1024x900 showed the complete India extent with 735 district features, all four coverage statuses, two active map canvases, and no horizontal overflow. Rendered colors were `#4f8064`, `#d7a53f`, `#b4523e`, and `#9a9d97`; chat message/input text rendered at 13px and suggestion text at 11px. The coverage endpoint returned HTTP 200 and the Karnataka ICU query completed its animated district focus without browser exceptions.
 - Matched query results use a two-tier map overlay: every matched facility receives an icon-only health-worker marker using `svg/health-worker-svgrepo-com.svg`, with compact screen-space collision offsets for nearby results. Names, trust state, and evidence remain hidden until selection. Selecting an icon or matched marker replaces it with the single rich evidence card; selecting another result swaps cards, while a map-background click restores the icon-only state. Motion handles keyed scale/fade transitions for both tiers.
-- Two-tier popup verification on 2026-07-19: the `ICU coverage in Karnataka` flow rendered two compact previews (`Victoria District Hospital` and `St. Martha’s Medical Centre`). Selecting Victoria produced one remaining preview and one rich detail card; a map-background click restored both previews and removed the card. No Next.js error overlay appeared; production build and lint passed.
+- Two-tier popup behavior supports compact facility previews, a single selected evidence card, and map-background dismissal; verify it with live facility responses before demo.
+- Selection-entry pivot verified on 2026-07-19: `/` renders capability, state, and cascading district selects with no chat input; the selector routes with structured `capability`, `state`, and `district` parameters. Lint and the Next.js production build pass, and production-server smoke checks returned HTTP 200 for `/` and a structured `/map` URL.
+- Real-data-only frontend verified on 2026-07-19: source scans find no hardcoded facility/geography/scenario datasets, lint and production build pass, and missing backend configuration produces explicit unavailable states with no substituted records. Set `VERIDEX_API_BASE_URL` for server components and optionally `NEXT_PUBLIC_API_BASE_URL` for browser requests.
 - Git/GitHub work is explicitly paused by the user until the frontend is functionally complete. Do not commit, configure remotes, push, or modify authorship unless the user explicitly resumes that work.
 
 ## Working conventions
@@ -212,6 +204,6 @@ Accessibility requirements: visible keyboard focus, semantic labels, adequate co
 - Read this file at the start of every frontend session.
 - Update it after every meaningful screen, API contract, design, deployment, persistence, or blocker change.
 - Work only inside `frontend/`; do not touch `/backend`.
-- Keep backend/mock switching isolated to `lib/api.ts`.
+- Keep backend response normalization and endpoint access isolated to `lib/api.ts`.
 - Preserve evidence, confidence, and uncertainty in every relevant UI state.
 - When the user explicitly resumes Git work, make small focused commits using their Git identity with no AI attribution or co-author lines. Until then, make no Git/GitHub changes.

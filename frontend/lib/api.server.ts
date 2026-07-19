@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { deriveDistrictCoverage, type CapabilityName } from "./mockData";
 
 type BoundaryCollection = { type: "FeatureCollection"; features: Array<{ properties: { shapeName: string } }> };
 
@@ -15,10 +14,4 @@ async function readBoundaryData(): Promise<BoundaryCollection> {
 
 export async function getCoverageGeoJson() {
   return readBoundaryData();
-}
-
-export async function getDistrictCoverage(capability: string) {
-  const boundaries = await readBoundaryData();
-  const validCapability = (["ICU", "Maternity", "Emergency", "Oncology", "Trauma", "NICU"] as const).includes(capability as CapabilityName) ? capability as CapabilityName : "ICU";
-  return deriveDistrictCoverage(boundaries.features.map((feature) => feature.properties.shapeName), validCapability);
 }
