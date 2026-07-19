@@ -1,4 +1,4 @@
-import type { CoverageStatus } from "./mockData";
+import type { CoverageStatus } from "./types";
 
 export const COVERAGE_COLORS: Record<CoverageStatus, string> = {
   verified_coverage: "#4f8064",

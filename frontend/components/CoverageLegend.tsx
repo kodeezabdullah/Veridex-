@@ -1,4 +1,4 @@
-import type { CoverageStatus } from "@/lib/mockData";
+import type { CoverageStatus } from "@/lib/types";
 
 export const coverageLabels: Record<CoverageStatus, { label: string; detail: string }> = {
   verified_coverage: { label: "Verified coverage", detail: "Corroborated facility claims" },

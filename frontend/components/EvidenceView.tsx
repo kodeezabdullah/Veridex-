@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { addFacilityToScenario, addScenarioNote, addScenarioOverride, createScenario, getScenarios } from "@/lib/api";
-import type { CapabilityClaim, Facility, Scenario } from "@/lib/mockData";
+import type { CapabilityClaim, Facility, Scenario } from "@/lib/types";
 
 function HighlightedField({ text, spans }: { text: string; spans: string[] }) {
   const matches = spans.filter((span) => text.toLowerCase().includes(span.toLowerCase()));
@@ -15,9 +15,10 @@ function ClaimEvidence({ claim, facility }: { claim: CapabilityClaim; facility: 
   const fields = Array.from(new Set(claim.evidence.map((item) => item.field)));
   return (
     <article className="claim-evidence">
-      <header><div><span className={`claim-badge ${claim.status}`}>{claim.status.replace("-", " ")}</span><h3>{claim.name}</h3></div><div className="confidence"><strong>{Math.round(claim.trust_score * 100)}</strong><span>trust score<br />{claim.confidence_level} confidence</span></div></header>
+      <header><div><span className={`claim-badge ${claim.status}`}>{claim.status.replace("_", " ")}</span><h3>{claim.name}</h3></div><div className="confidence"><strong>{claim.trust_score_pct}</strong><span>trust score<br />{claim.confidence_level} confidence</span></div></header>
       <div className="evidence-fields">{fields.map((field) => { const raw = facility.raw_fields[field as keyof Facility["raw_fields"]]; const spans = claim.evidence.filter((item) => item.field === field).map((item) => item.text_span); return <div key={field}><span className="source-label">Source field · {field}</span><blockquote>{typeof raw === "string" ? <HighlightedField text={raw} spans={spans} /> : raw ?? "Not reported"}</blockquote></div>; })}</div>
-      {claim.status !== "verified" && <p className="uncertainty-note"><span aria-hidden="true">!</span>{claim.status === "claimed-only" ? "This claim appears in source material but lacks independent corroboration." : "No supporting signal was found. This does not prove the capability is absent."}</p>}
+      {claim.status !== "verified" && <p className="uncertainty-note"><span aria-hidden="true">!</span>{claim.status === "likely" ? "The indexed evidence is likely but still requires direct confirmation." : claim.status === "weak_signal" ? "Only a weak supporting signal was found; do not treat it as confirmed capability." : "No supporting signal was found. This does not prove the capability is absent."}</p>}
+      {claim.confirm_message && <p className="confirm-message">{claim.confirm_message}</p>}
     </article>
   );
 }
@@ -25,10 +26,10 @@ function ClaimEvidence({ claim, facility }: { claim: CapabilityClaim; facility: 
 export function EvidenceView({ facility, initialCapability }: { facility: Facility; initialCapability?: string }) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]); const [scenarioId, setScenarioId] = useState(""); const [note, setNote] = useState(""); const [override, setOverride] = useState<"accept" | "needs-review" | "reject">("needs-review"); const [reason, setReason] = useState(""); const [message, setMessage] = useState("");
   const [activeClaim, setActiveClaim] = useState(initialCapability && facility.capabilities.some((claim) => claim.name === initialCapability) ? initialCapability : facility.capabilities[0].name);
-  useEffect(() => { getScenarios().then((items) => { setScenarios(items); setScenarioId(items[0]?.scenario_id ?? ""); }); }, []);
+  useEffect(() => { getScenarios().then((items) => { setScenarios(items); setScenarioId(items[0]?.scenario_id ?? ""); }).catch(() => setMessage("The real scenarios API is unavailable; no local demo scenario was substituted.")); }, []);
   const selectedClaim = facility.capabilities.find((claim) => claim.name === activeClaim) ?? facility.capabilities[0];
   const ensureScenario = async () => { if (scenarioId) return scenarioId; const created = await createScenario(`${activeClaim} review — ${facility.location.state}`); setScenarios((current) => [created, ...current]); setScenarioId(created.scenario_id); return created.scenario_id; };
-  const savePlannerInput = async () => { const id = await ensureScenario(); await addFacilityToScenario(id, facility.facility_id); if (note.trim()) await addScenarioNote(id, { facility_id: facility.facility_id, note: note.trim(), timestamp: new Date().toISOString() }); if (reason.trim()) await addScenarioOverride(id, { facility_id: facility.facility_id, capability: activeClaim, value: override, reason: reason.trim(), timestamp: new Date().toISOString() }); setMessage("Saved to scenario. Your note and override remain distinct from source evidence."); };
+  const savePlannerInput = async () => { try { const id = await ensureScenario(); await addFacilityToScenario(id, facility.facility_id); if (note.trim()) await addScenarioNote(id, { facility_id: facility.facility_id, note: note.trim(), timestamp: new Date().toISOString() }); if (reason.trim()) await addScenarioOverride(id, { facility_id: facility.facility_id, capability: activeClaim, value: override, reason: reason.trim(), timestamp: new Date().toISOString() }); setMessage("Saved to scenario. Your note and override remain distinct from source evidence."); } catch { setMessage("Could not save because the real scenarios API is unavailable."); } };
 
   return (
     <div className="evidence-layout">
