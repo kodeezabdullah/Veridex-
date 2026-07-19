@@ -8,10 +8,8 @@ from typing import Any
 
 from backend.db import query
 from backend.models import (
-    CapabilityClaim,
     CapabilityEvidence,
     DataCompleteness,
-    EvidenceSnippet,
     FacilityLocation,
     FacilityResponse,
     RawFacilityFields,
@@ -100,41 +98,6 @@ def _evidence_from_row(
     )
 
 
-def _claim_from_evidence(evidence: CapabilityEvidence) -> CapabilityClaim:
-    status = (
-        "verified"
-        if evidence.evidence_status == "verified"
-        else "no-signal"
-        if evidence.evidence_status == "no_signal"
-        else "claimed-only"
-    )
-    confidence = (
-        "high"
-        if evidence.trust_score_pct >= 80
-        else "medium"
-        if evidence.trust_score_pct >= 60
-        else "low"
-    )
-    snippets = (
-        []
-        if evidence.text_span is None
-        else [
-            EvidenceSnippet(
-                field=evidence.field_source or "unknown",
-                text_span=evidence.text_span,
-                type="corroborating" if status == "verified" else "claim",
-            )
-        ]
-    )
-    return CapabilityClaim(
-        name=evidence.capability,
-        status=status,
-        trust_score=evidence.trust_score,
-        confidence_level=confidence,
-        evidence=snippets,
-    )
-
-
 def _source_urls(raw_urls: Any) -> list[str]:
     if isinstance(raw_urls, (list, tuple)):
         return [str(value).strip() for value in raw_urls if str(value).strip()]
@@ -188,7 +151,6 @@ def map_facility(
             lon=_as_float(row.get("longitude")) if coordinates_valid else None,
             unresolved=not district_resolved,
         ),
-        capabilities=[_claim_from_evidence(item) for item in evidence],
         capability_evidence=evidence,
         raw_fields=RawFacilityFields(
             description=_first(row, "description", "description_clean"),

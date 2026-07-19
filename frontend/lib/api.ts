@@ -81,21 +81,17 @@ function readBoolean(record: JsonRecord, ...keys: string[]): boolean {
   return false;
 }
 
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:8010";
+
 function apiUrl(path: string): string {
-  const publicBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(
-    /\/$/,
-    "",
-  );
+  const publicBase = (
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL
+  ).replace(/\/$/, "");
   if (typeof window !== "undefined") return `${publicBase}${path}`;
 
   const serverBase = (
     process.env.VERIDEX_API_BASE_URL ?? publicBase
   ).replace(/\/$/, "");
-  if (!serverBase) {
-    throw new ApiError(
-      "Real backend is not configured. Set VERIDEX_API_BASE_URL for server requests.",
-    );
-  }
   return `${serverBase}${path}`;
 }
 

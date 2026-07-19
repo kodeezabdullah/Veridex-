@@ -26,6 +26,19 @@ type GeoFeature = {
 };
 type GeoCollection = { type: "FeatureCollection"; features: GeoFeature[] };
 type PreviewPosition = { facility: Facility; x: number; y: number };
+const EMPTY_MATCHED_FACILITY_IDS: string[] = [];
+
+function previewPositionsEqual(
+  current: PreviewPosition[],
+  next: PreviewPosition[],
+): boolean {
+  return current.length === next.length && current.every((position, index) => {
+    const candidate = next[index];
+    return position.facility.facility_id === candidate.facility.facility_id
+      && Math.abs(position.x - candidate.x) < 0.1
+      && Math.abs(position.y - candidate.y) < 0.1;
+  });
+}
 
 const mapStyle: maplibregl.StyleSpecification = {
   version: 8,
@@ -72,7 +85,7 @@ function enrichGeoJson(geoJson: GeoCollection, coverage: RegionCoverage[]): GeoC
   };
 }
 
-export function MapView({ geoJson, coverage, facilities, selectedRegion, focusedRegionIds = [], matchedFacilityIds = [], queriedCapability = "ICU", onSelectRegion }: { geoJson: GeoCollection; coverage: RegionCoverage[]; facilities: Facility[]; selectedRegion: string; focusedRegionIds?: string[]; matchedFacilityIds?: string[]; queriedCapability?: string; onSelectRegion: (regionId: string) => void }) {
+export function MapView({ geoJson, coverage, facilities, selectedRegion, focusedRegionIds = [], matchedFacilityIds = EMPTY_MATCHED_FACILITY_IDS, queriedCapability = "ICU", onSelectRegion }: { geoJson: GeoCollection; coverage: RegionCoverage[]; facilities: Facility[]; selectedRegion: string; focusedRegionIds?: string[]; matchedFacilityIds?: string[]; queriedCapability?: string; onSelectRegion: (regionId: string) => void }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
@@ -83,7 +96,16 @@ export function MapView({ geoJson, coverage, facilities, selectedRegion, focused
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [previewPositions, setPreviewPositions] = useState<PreviewPosition[]>([]);
   const matchedFacilities = useMemo(() => facilities.filter((facility) => matchedFacilityIds.includes(facility.facility_id)), [facilities, matchedFacilityIds]);
+  const matchedFacilitiesKey = useMemo(
+    () => matchedFacilities.map((facility) => `${facility.facility_id}:${facility.location.lon}:${facility.location.lat}`).join("|"),
+    [matchedFacilities],
+  );
+  const matchedFacilitiesRef = useRef(matchedFacilities);
   const activePopupFacility = popupFacility && (matchedFacilityIds.length === 0 || matchedFacilityIds.includes(popupFacility.facility_id)) ? popupFacility : null;
+
+  useEffect(() => {
+    matchedFacilitiesRef.current = matchedFacilities;
+  }, [matchedFacilities]);
 
   useEffect(() => {
     selectRegionRef.current = onSelectRegion;
@@ -110,7 +132,9 @@ export function MapView({ geoJson, coverage, facilities, selectedRegion, focused
       const regionId = event.features?.[0]?.properties?.shapeName as string | undefined;
       if (regionId) selectRegionRef.current(regionId);
     };
-    const handleMapBackgroundClick = () => setPopupFacility(null);
+    const handleMapBackgroundClick = (event: MapLayerMouseEvent) => {
+      if (!event.defaultPrevented) setPopupFacility(null);
+    };
     map.on("load", () => {
       map.fitBounds([[67.5, 6], [97.5, 36.5]], { padding: { top: 105, right: 55, bottom: 65, left: 55 }, maxZoom: 4, duration: 0 });
       map.addImage("no-data-hatch", createHatchPattern());
@@ -178,7 +202,7 @@ export function MapView({ geoJson, coverage, facilities, selectedRegion, focused
 
   useEffect(() => {
     if (!mapLoaded || !overlayRef.current) return;
-    overlayRef.current.setProps({ layers: [new ScatterplotLayer({ id: "facility-points", data: facilities, pickable: true, getPosition: (facility: Facility) => [facility.location.lon, facility.location.lat], getRadius: (facility: Facility) => matchedFacilityIds.includes(facility.facility_id) ? 11000 : 7000, radiusMinPixels: 4, radiusMaxPixels: 13, getFillColor: (facility: Facility) => matchedFacilityIds.length === 0 || matchedFacilityIds.includes(facility.facility_id) ? [251, 249, 242, 255] : [157, 163, 158, 130], getLineColor: (facility: Facility) => matchedFacilityIds.includes(facility.facility_id) ? [32, 126, 94, 255] : [23, 63, 53, 220], getLineWidth: (facility: Facility) => matchedFacilityIds.includes(facility.facility_id) ? 2 : 1, stroked: true, lineWidthMinPixels: 2, onClick: ({ object }, event) => { event.srcEvent.stopPropagation(); if (object && (matchedFacilityIds.length === 0 || matchedFacilityIds.includes((object as Facility).facility_id))) setPopupFacility(object as Facility); }, updateTriggers: { getRadius: [matchedFacilityIds], getFillColor: [matchedFacilityIds], getLineColor: [matchedFacilityIds], getLineWidth: [matchedFacilityIds] } })] });
+    overlayRef.current.setProps({ layers: [new ScatterplotLayer({ id: "facility-points", data: facilities, pickable: true, getPosition: (facility: Facility) => [facility.location.lon, facility.location.lat], getRadius: (facility: Facility) => matchedFacilityIds.includes(facility.facility_id) ? 11000 : 7000, radiusMinPixels: 4, radiusMaxPixels: 13, getFillColor: (facility: Facility) => matchedFacilityIds.length === 0 || matchedFacilityIds.includes(facility.facility_id) ? [251, 249, 242, 255] : [157, 163, 158, 130], getLineColor: (facility: Facility) => matchedFacilityIds.includes(facility.facility_id) ? [32, 126, 94, 255] : [23, 63, 53, 220], getLineWidth: (facility: Facility) => matchedFacilityIds.includes(facility.facility_id) ? 2 : 1, stroked: true, lineWidthMinPixels: 2, onClick: ({ object }, event) => { if (object && (matchedFacilityIds.length === 0 || matchedFacilityIds.includes((object as Facility).facility_id))) { event.srcEvent.preventDefault(); setPopupFacility(object as Facility); return true; } return false; }, updateTriggers: { getRadius: [matchedFacilityIds], getFillColor: [matchedFacilityIds], getLineColor: [matchedFacilityIds], getLineWidth: [matchedFacilityIds] } })] });
   }, [facilities, mapLoaded, matchedFacilityIds]);
 
   useEffect(() => {
@@ -187,18 +211,19 @@ export function MapView({ geoJson, coverage, facilities, selectedRegion, focused
     const update = () => {
       const occupied: Array<{ x: number; y: number }> = [];
       const candidates = [{ x: 0, y: 0 }, { x: 0, y: -34 }, { x: 34, y: 0 }, { x: -34, y: 0 }, { x: 0, y: 34 }];
-      setPreviewPositions(matchedFacilities.map((facility) => {
+      const nextPositions = matchedFacilitiesRef.current.map((facility) => {
         const point = map.project([facility.location.lon, facility.location.lat]);
         const offset = candidates.find((candidate) => occupied.every((placed) => Math.abs(point.x + candidate.x - placed.x) > 36 || Math.abs(point.y + candidate.y - placed.y) > 36)) ?? candidates[occupied.length % candidates.length];
         const position = { x: point.x + offset.x, y: point.y + offset.y };
         occupied.push(position);
         return { facility, ...position };
-      }));
+      });
+      setPreviewPositions((current) => previewPositionsEqual(current, nextPositions) ? current : nextPositions);
     };
     update();
     map.on("move", update);
     return () => { map.off("move", update); };
-  }, [mapLoaded, matchedFacilities]);
+  }, [mapLoaded, matchedFacilitiesKey]);
 
   useEffect(() => {
     const map = mapRef.current;

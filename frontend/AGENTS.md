@@ -56,19 +56,16 @@ Returns facility records (the supplied contract presents a single record shape):
     "lat": 31.42,
     "lon": 73.08
   },
-  "capabilities": [
+  "capability_evidence": [
     {
-      "name": "ICU",
-      "status": "verified",
+      "unique_id": "f_00123",
+      "capability": "ICU",
+      "evidence_status": "verified",
       "trust_score": 0.82,
-      "confidence_level": "high",
-      "evidence": [
-        {
-          "field": "description",
-          "text_span": "10-bed ICU with ventilator support and 24/7 staffing",
-          "type": "corroborating"
-        }
-      ]
+      "trust_score_pct": 82,
+      "field_source": "description",
+      "text_span": "10-bed ICU with ventilator support and 24/7 staffing",
+      "confirm_message": "Confirm directly with the facility."
     }
   ],
   "raw_fields": {
@@ -197,6 +194,8 @@ Accessibility requirements: visible keyboard focus, semantic labels, adequate co
 - Two-tier popup behavior supports compact facility previews, a single selected evidence card, and map-background dismissal; verify it with live facility responses before demo.
 - Selection-entry pivot verified on 2026-07-19: `/` renders capability, state, and cascading district selects with no chat input; the selector routes with structured `capability`, `state`, and `district` parameters. Lint and the Next.js production build pass, and production-server smoke checks returned HTTP 200 for `/` and a structured `/map` URL.
 - Real-data-only frontend verified on 2026-07-19: source scans find no hardcoded facility/geography/scenario datasets, lint and production build pass, and missing backend configuration produces explicit unavailable states with no substituted records. Set `VERIDEX_API_BASE_URL` for server components and optionally `NEXT_PUBLIC_API_BASE_URL` for browser requests.
+- The facility API now exposes `capability_evidence` as its sole evidence-status array. `lib/api.ts` normalizes those rows into the frontend's internal `capabilities` view model; the backend no longer emits the legacy `claimed-only` status vocabulary.
+- Local development defaults both frontend API URL settings to `http://127.0.0.1:8010`; deployments can override `NEXT_PUBLIC_API_BASE_URL` and `VERIDEX_API_BASE_URL`.
 - Git/GitHub work is explicitly paused by the user until the frontend is functionally complete. Do not commit, configure remotes, push, or modify authorship unless the user explicitly resumes that work.
 
 ## Working conventions

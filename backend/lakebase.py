@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterator
 import psycopg2
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.config import Config
 from dotenv import load_dotenv
 
 DOTENV_PATH = Path(__file__).resolve().with_name(".env")
@@ -38,15 +40,25 @@ def _settings() -> dict[str, str]:
     return values
 
 
-def _database_token(settings: dict[str, str]) -> str:
-    workspace_host = settings["DATABRICKS_SERVER_HOSTNAME"]
-    if not workspace_host.startswith(("http://", "https://")):
-        workspace_host = f"https://{workspace_host}"
-    client = WorkspaceClient(
+@lru_cache(maxsize=1)
+def _workspace_client(workspace_host: str, token: str) -> WorkspaceClient:
+    config = Config(
         host=workspace_host,
-        token=settings["DATABRICKS_TOKEN"],
+        token=token,
+        auth_type="pat",
+        http_timeout_seconds=5,
+        retry_timeout_seconds=5,
     )
-    endpoint_name = None
+    return WorkspaceClient(config=config)
+
+
+@lru_cache(maxsize=1)
+def _lakebase_endpoint(
+    workspace_host: str,
+    token: str,
+    lakebase_host: str,
+) -> str:
+    client = _workspace_client(workspace_host, token)
     for project in client.postgres.list_projects():
         for branch in client.postgres.list_branches(parent=project.name):
             for endpoint in client.postgres.list_endpoints(parent=branch.name):
@@ -55,17 +67,23 @@ def _database_token(settings: dict[str, str]) -> str:
                     "host",
                     None,
                 )
-                if endpoint_host == settings["LAKEBASE_HOST"]:
-                    endpoint_name = endpoint.name
-                    break
-            if endpoint_name:
-                break
-        if endpoint_name:
-            break
-    if endpoint_name is None:
-        raise LakebaseConfigurationError(
-            "No Lakebase Autoscaling endpoint matches LAKEBASE_HOST."
-        )
+                if endpoint_host == lakebase_host:
+                    return str(endpoint.name)
+    raise LakebaseConfigurationError(
+        "No Lakebase Autoscaling endpoint matches LAKEBASE_HOST."
+    )
+
+
+def _database_token(settings: dict[str, str]) -> str:
+    workspace_host = settings["DATABRICKS_SERVER_HOSTNAME"]
+    if not workspace_host.startswith(("http://", "https://")):
+        workspace_host = f"https://{workspace_host}"
+    client = _workspace_client(workspace_host, settings["DATABRICKS_TOKEN"])
+    endpoint_name = _lakebase_endpoint(
+        workspace_host,
+        settings["DATABRICKS_TOKEN"],
+        settings["LAKEBASE_HOST"],
+    )
     credential = client.postgres.generate_database_credential(
         endpoint=endpoint_name
     )

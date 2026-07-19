@@ -50,6 +50,7 @@ def test_mapping_uses_nfhs_geography_and_reporting_flags():
     assert facility.raw_fields.capacity == 180
     assert facility.capability_evidence[0].capability == "ICU"
     assert 0 <= facility.capability_evidence[0].trust_score_pct <= 100
+    assert "capabilities" not in facility.model_dump()
 
 
 def test_invalid_coordinates_and_unresolved_district_are_explicit():

@@ -12,6 +12,7 @@ This FastAPI service exposes Veridex facility, evidence, coverage, and scenario 
 - Lakebase requires the `LAKEBASE_*` settings in `.env`. `lakebase.py` resolves the Autoscaling endpoint by matching `LAKEBASE_HOST` against workspace Postgres endpoints.
 - Every new PostgreSQL connection calls `WorkspaceClient.postgres.generate_database_credential`; the short-lived credential is never cached.
 - Run locally from the repository root with `backend/.venv/Scripts/python -m uvicorn backend.main:app`.
+- Local CORS allows `http://localhost:3000` and `http://127.0.0.1:3000` for the Next.js development server.
 - Smoke-test facilities with `backend/.venv/Scripts/python -m backend.scripts.smoke_databricks --capability ICU --state Karnataka --district Bangalore`.
 
 ## Endpoint status

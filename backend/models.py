@@ -17,20 +17,6 @@ class FacilityLocation(BaseModel):
     unresolved: bool = False
 
 
-class EvidenceSnippet(BaseModel):
-    field: str
-    text_span: str
-    type: Literal["corroborating", "claim", "no_signal"]
-
-
-class CapabilityClaim(BaseModel):
-    name: str
-    status: Literal["verified", "claimed-only", "no-signal"]
-    trust_score: float = Field(ge=0, le=1)
-    confidence_level: Literal["high", "medium", "low"]
-    evidence: list[EvidenceSnippet]
-
-
 class CapabilityEvidence(BaseModel):
     unique_id: str
     capability: str
@@ -61,7 +47,6 @@ class FacilityResponse(BaseModel):
     unique_id: str
     name: str
     location: FacilityLocation
-    capabilities: list[CapabilityClaim]
     capability_evidence: list[CapabilityEvidence]
     raw_fields: RawFacilityFields
     data_completeness: DataCompleteness

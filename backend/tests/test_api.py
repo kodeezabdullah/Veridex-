@@ -9,6 +9,19 @@ def test_health_route_works_without_external_services():
     assert client.get("/health").json() == {"status": "ok"}
 
 
+def test_local_frontend_origin_is_allowed_by_cors():
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
 def test_real_route_fails_gracefully_when_env_is_blank(monkeypatch):
     for name in (
         "DATABRICKS_SERVER_HOSTNAME",
