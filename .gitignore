@@ -16,6 +16,12 @@ Thumbs.db
 **/dist/
 *.tsbuildinfo
 
+# Python caches and virtual environments
+**/__pycache__/
+venv/
+.venv/
+*.pyc
+
 # Logs and runtime files
 *.log
 *.pid
