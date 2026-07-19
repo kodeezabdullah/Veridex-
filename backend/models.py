@@ -65,6 +65,11 @@ class FacilityResponse(BaseModel):
     capability_evidence: list[CapabilityEvidence]
     raw_fields: RawFacilityFields
     data_completeness: DataCompleteness
+    viewed_capability: str | None = None
+    validator_flags: list[dict[str, str]] = Field(default_factory=list)
+    explanation: dict[str, Any] | None = None
+    tavily_eligible: bool = False
+    tavily_result: dict[str, Any] | None = None
 
 
 class RegionCoverage(BaseModel):
@@ -75,7 +80,7 @@ class RegionCoverage(BaseModel):
     capability_queried: str
     coverage_status: Literal["verified_coverage", "weak_coverage", "no_facility", "no_data"]
     facility_count: int
-    avg_trust_score: float
+    avg_trust_score_pct: int = Field(ge=0, le=100)
 
 
 class ScenarioNote(BaseModel):
@@ -91,7 +96,17 @@ class Scenario(BaseModel):
     notes: list[ScenarioNote] = Field(default_factory=list)
     overrides: list[dict[str, Any]] = Field(default_factory=list)
     created_at: str
+    updated_at: str | None = None
 
 
 class ScenarioCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+
+
+class ScenarioNoteCreate(BaseModel):
+    facility_unique_id: str = Field(min_length=1)
+    note_text: str = Field(min_length=1, max_length=4000)
+
+
+class ScenarioShortlistCreate(BaseModel):
+    facility_unique_id: str = Field(min_length=1)

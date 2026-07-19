@@ -24,9 +24,23 @@ BASE_ROW = {
     "capacity_reported": True,
 }
 
+EVIDENCE_ROW = {
+    "unique_id": "facility-123",
+    "capability": "ICU",
+    "evidence_status": "verified",
+    "trust_score": 0.82,
+    "trust_score_pct": 82,
+    "field_source": "description",
+    "text_span": "A 10-bed ICU with ventilator support is listed.",
+    "confirm_message": "Confirm directly with the facility.",
+}
+
 
 def test_mapping_uses_nfhs_geography_and_reporting_flags():
-    facility = map_facility(BASE_ROW, "ICU")
+    facility = map_facility(
+        {**BASE_ROW, "nfhs_state_ut": " Karnataka ", "nfhs_district_name": " Bangalore "},
+        [EVIDENCE_ROW],
+    )
 
     assert facility.location.state == "Karnataka"
     assert facility.location.district == "Bangalore"
@@ -48,24 +62,73 @@ def test_invalid_coordinates_and_unresolved_district_are_explicit():
 
 @patch("backend.services.facilities.query")
 def test_list_query_uses_parameterized_capability_and_nfhs_filters(mock_query):
-    mock_query.return_value = [BASE_ROW]
+    mock_query.return_value = [
+        {
+            **BASE_ROW,
+            **{f"evidence_{key}": value for key, value in EVIDENCE_ROW.items()},
+        }
+    ]
 
     results = list_facilities("ICU", "Bangalore", "Karnataka")
 
     sql_text, params = mock_query.call_args.args
-    assert "CAST(capability AS STRING)" in sql_text
-    assert "LOWER(nfhs_district_name) = ?" in sql_text
-    assert "LOWER(nfhs_state_ut) = ?" in sql_text
-    assert params == ["%icu%", "bangalore", "karnataka"]
+    assert "INNER JOIN veridex.gold.capability_evidence" in sql_text
+    assert "LOWER(TRIM(evidence.capability)) = LOWER(TRIM(?))" in sql_text
+    assert "LOWER(TRIM(facility.nfhs_district_name)) = LOWER(TRIM(?))" in sql_text
+    assert "LOWER(TRIM(facility.nfhs_state_ut)) = LOWER(TRIM(?))" in sql_text
+    assert params == ["ICU", "Bangalore", "Karnataka"]
     assert results[0].facility_id == "facility-123"
 
 
 @patch("backend.services.facilities.query")
 def test_single_facility_uses_unique_id_parameter(mock_query):
-    mock_query.return_value = [BASE_ROW]
+    mock_query.side_effect = [[BASE_ROW], [EVIDENCE_ROW]]
 
     facility = get_facility("facility-123")
 
-    assert mock_query.call_args.args[1] == ["facility-123"]
+    assert mock_query.call_args_list[0].args[1] == ["facility-123"]
+    assert mock_query.call_args_list[1].args[1] == ["facility-123"]
     assert facility is not None
     assert facility.unique_id == "facility-123"
+
+
+@patch("backend.services.facilities._check_tavily")
+@patch("backend.services.facilities._generate_explanation")
+@patch("backend.services.facilities._run_validators", return_value=[])
+@patch("backend.services.facilities.query")
+def test_high_acuity_verified_detail_runs_tavily_gate(
+    mock_query, _validators, explanation, tavily
+):
+    mock_query.side_effect = [[BASE_ROW], [EVIDENCE_ROW]]
+    explanation.return_value = {"ok": True, "explanation": "Verified."}
+    tavily.return_value = {"status": "independently_corroborated"}
+
+    facility = get_facility("facility-123", "ICU")
+
+    assert facility is not None
+    assert facility.tavily_eligible is True
+    tavily.assert_called_once()
+
+
+@patch("backend.services.facilities._check_tavily")
+@patch("backend.services.facilities._generate_explanation")
+@patch("backend.services.facilities._run_validators", return_value=[])
+@patch("backend.services.facilities.query")
+def test_noneligible_detail_does_not_call_tavily(
+    mock_query, _validators, explanation, tavily
+):
+    weak_emergency = {
+        **EVIDENCE_ROW,
+        "capability": "Emergency",
+        "evidence_status": "weak_signal",
+        "trust_score": 0.6,
+        "trust_score_pct": 60,
+    }
+    mock_query.side_effect = [[BASE_ROW], [weak_emergency]]
+    explanation.return_value = {"ok": True, "explanation": "Limited evidence."}
+
+    facility = get_facility("facility-123", "Emergency")
+
+    assert facility is not None
+    assert facility.tavily_eligible is False
+    tavily.assert_not_called()

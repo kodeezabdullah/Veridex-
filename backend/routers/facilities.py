@@ -32,9 +32,12 @@ def facilities(
 
 
 @router.get("/facility/{unique_id}", response_model=FacilityResponse)
-def facility(unique_id: str) -> FacilityResponse:
+def facility(
+    unique_id: str,
+    capability: str | None = Query(default=None, min_length=1),
+) -> FacilityResponse:
     try:
-        result = get_facility(unique_id)
+        result = get_facility(unique_id, capability)
     except Exception as error:
         raise _service_unavailable(error) from error
     if result is None:

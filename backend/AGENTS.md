@@ -2,29 +2,30 @@
 
 ## Scope
 
-This folder contains the FastAPI service that exposes Veridex facility, evidence, coverage, and scenario contracts. It reads facility records from Databricks and keeps unavailable downstream data behind stable temporary mocks.
+This FastAPI service exposes Veridex facility, evidence, coverage, and scenario contracts. Facility, capability-evidence, and coverage data come from Databricks; scenario persistence uses Lakebase PostgreSQL.
 
-## Connection setup
+## Connections
 
 - Copy values into `backend/.env` from `backend/.env.example`; never commit `.env`.
-- Required variables: `DATABRICKS_SERVER_HOSTNAME`, `DATABRICKS_HTTP_PATH`, and `DATABRICKS_TOKEN`.
-- `db.py` resolves `backend/.env` from its own absolute `__file__` location and loads it with `override=True`, so behavior does not depend on the command's working directory or inherited blank variables. `get_connection()` validates configuration lazily so imports and API startup work without credentials. Missing values produce a clear configuration error only when a real Databricks endpoint is called.
-- `db.py::query()` opens a connection per query, uses parameterized SQL, maps cursor columns to dictionaries, and always closes the connection.
-- Run locally from the repository root with `backend/.venv/Scripts/python -m uvicorn backend.main:app`; deployment must likewise use the package-qualified `backend.main:app` entrypoint.
-- After filling `.env`, smoke-test both real endpoints in-process with `backend/.venv/Scripts/python -m backend.scripts.smoke_databricks --capability ICU --state Karnataka --district Bangalore`. Pass `--unique-id` when checking a known facility directly.
+- Databricks requires `DATABRICKS_SERVER_HOSTNAME`, `DATABRICKS_HTTP_PATH`, and `DATABRICKS_TOKEN`.
+- `db.py` resolves `.env` relative to its own file, validates settings lazily, opens one Databricks SQL connection per query, maps rows to dictionaries, and always closes the connection.
+- Lakebase requires the `LAKEBASE_*` settings in `.env`. `lakebase.py` resolves the Autoscaling endpoint by matching `LAKEBASE_HOST` against workspace Postgres endpoints.
+- Every new PostgreSQL connection calls `WorkspaceClient.postgres.generate_database_credential`; the short-lived credential is never cached.
+- Run locally from the repository root with `backend/.venv/Scripts/python -m uvicorn backend.main:app`.
+- Smoke-test facilities with `backend/.venv/Scripts/python -m backend.scripts.smoke_databricks --capability ICU --state Karnataka --district Bangalore`.
 
 ## Endpoint status
 
-- **Real:** `GET /api/facilities` queries `veridex.gold.facilities_clean`, with optional capability, state, and district filters.
-- **Real:** `GET /api/facility/{unique_id}` queries the same table by `unique_id`.
-- **Temporary mock:** `GET /api/regions/coverage` remains mocked until Muhammad provides the district aggregation table. Do not remove the mock before the aggregation and capability evidence inputs exist.
-- **Temporary stub:** `GET /api/scenarios` and `POST /api/scenarios` return in-memory mock contracts until Lakebase/Supabase persistence is implemented.
+- **Real:** `GET /api/facilities` joins `veridex.gold.facilities_clean` to `veridex.gold.capability_evidence`, with optional capability, state, and district filters.
+- **Real:** `GET /api/facility/{unique_id}` returns the complete facility and all capability-evidence rows. An optional `capability` query parameter activates capability-specific validator, explanation, and Tavily enrichment.
+- **Real:** `GET /api/regions/coverage` queries `veridex.gold.region_coverage`. It returns `region_id` as `{nfhs_district_name}_{nfhs_state_ut}`, `level="district"`, and `avg_trust_score_pct` as an integer from 0–100. It returns an empty list for no match and a clear 503 when the table or service is unavailable; it never falls back to mocks.
+- **Real:** `GET /api/scenarios`, `POST /api/scenarios`, `POST /api/scenarios/{id}/notes`, and `POST /api/scenarios/{id}/shortlist` persist planner data in Lakebase.
 
-Facility mapping uses `nfhs_state_ut` and `nfhs_district_name`, never unreliable address geography for display. Coordinates are returned only when `coordinates_valid` is true. Doctors and capacity are returned only when their corresponding reported flags are true. `district_resolved=false` is exposed as `location.unresolved=true`, not as a coverage gap.
+Facility mapping uses trimmed `nfhs_state_ut` and `nfhs_district_name`, never unreliable address geography for display. Coordinates are returned only when `coordinates_valid` is true. Doctors and capacity are returned only when their reporting flags are true. `district_resolved=false` becomes `location.unresolved=true`, not a coverage gap.
 
-## capability_evidence integration seam
+## Capability evidence and enrichment
 
-The real table is pending. Responses already expose `capability_evidence` entries with the final shape:
+Capability filtering uses the real `veridex.gold.capability_evidence` table rather than raw facility text. Evidence rows retain this contract:
 
 ```json
 {
@@ -35,15 +36,14 @@ The real table is pending. Responses already expose `capability_evidence` entrie
   "trust_score_pct": 82,
   "field_source": "description",
   "text_span": "10-bed ICU with ventilator support",
-  "confirm_message": "Verified capability evidence is available."
+  "confirm_message": "Confirm directly with the facility."
 }
 ```
 
-`evidence_status` is one of `verified`, `likely`, `weak_signal`, or `no_signal`; `trust_score` is 0–1 and `trust_score_pct` is 0–100 and is the display value. The mock is deterministic. When Muhammad's `capability_evidence` table lands, replace only the evidence query/provider internals and retain this response contract.
+`evidence_status` is `verified`, `likely`, `weak_signal`, or `no_signal`. For a viewed capability, the detail endpoint runs `run_all_validators` and `generate_explanation`. Tavily is caller-gated to ICU, NICU, Trauma, or Oncology with verified or likely evidence.
 
-## Pending dependencies
+## Operations and pending work
 
-- Muhammad: production `capability_evidence` table.
-- Muhammad: district-level capability aggregation table for `/api/regions/coverage`.
-- GIS/persistence workstream: Lakebase or Supabase scenario persistence.
-- Live facility smoke tests require the user-supplied Databricks values in `backend/.env`.
+- Refresh `veridex.gold.region_coverage` with `backend/agents/region_aggregation.py` after facility or evidence updates.
+- Tavily enrichment requires `TAVILY_API_KEY`; absence returns an explicit unavailable result without failing facility detail.
+- The four required Lakebase scenario operations are real. Rename, delete, override, and shortlist-removal endpoints remain future contract additions.
